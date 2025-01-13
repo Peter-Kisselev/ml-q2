@@ -1,0 +1,1 @@
+This project uses a venv (virtualenv), so make sure to do that and install the necessary packages
