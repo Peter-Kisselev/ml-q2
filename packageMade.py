@@ -1,144 +1,38 @@
-import pandas as pd; import numpy as np; import pprint; import math; import random as rd
+import pandas as pd
+import numpy as np
 import time
+import pathlib;
+from sklearn.ensemble import RandomForestClassifier 
+from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import LabelEncoder
+import utils
 
-import test; stTotal = time.time() #Start timing
-import pathlib; ROOT = pathlib.Path(__file__).parent.resolve(); ROOT = str(ROOT) + "/" # Make file-getting location agnostic
-print() # Clear print buffer
 pd.set_option("future.no_silent_downcasting", True)
 
-import matplotlib.pyplot as plt
+# Hyperparamaters
+stTotal = time.time()
+ROOT = pathlib.Path(__file__).parent.resolve(); ROOT = str(ROOT) + "/" # Make file-getting location agnostic
+le = LabelEncoder()
 
-
-
-
-#
-# General functions
-#
-
-#Stat counter
-def updateStats(keyPhrase):
-    if keyPhrase not in STATS: STATS[keyPhrase] = 1
-    else: STATS[keyPhrase] += 1
-
-
-# Generate the confusion matrix
-def genConfusionMatrix(testData, className, predictions, classAmnt=2):
-    trueVals = testData[className].to_list()
-    matrix = [[0 for _ in range(classAmnt)] for _ in range(classAmnt)]
-    for i in range(len(predictions)):
-        curPred = int(predictions[i])
-        curTrue = trueVals[i]
-        matrix[curTrue][curPred] += 1
-    return matrix
-
-
-# Cleanly output the confusion matrix
-def printConfusionMatrix(matrix):
-    sideTxt = "Actual"
-    joinStr = "+".join(("-"*5) for _ in range(len(matrix[0])))
-
-    n = 0
-    if len(matrix[0]) <= 2:
-        print(sideTxt[0] + " Predicted")
-    # sideTxt = "tual"
-        print(sideTxt[1] + " " + joinStr)
-        n = 2
-    else:
-        print("  Predicted")
-        print(sideTxt[0] + " " + joinStr)
-        n = 1
-
-    printStr = []
-    for ind, row in enumerate(matrix):
-        rowStr = []
-        for el in row:
-            rowStr.append(f" {str(el):3.3}")
-        rowStr = " |".join(rowStr)
-        printStr.append(rowStr)
-        if ind != len(matrix) - 1: printStr.append(joinStr)
-    finalStr = []
-    for row in printStr:
-        if n < len(sideTxt):
-            finalStr.append(sideTxt[n] + " " + row)
-        else:
-            finalStr.append("  " + row)
-        n += 1
-    printStr = ("\n").join(finalStr)
-    print(printStr)
-    if n < len(sideTxt):
-        print("l " + joinStr)
-    else:
-        print("  " + joinStr)
-
-
-# Do confusion matrix calculations and provide key if necessary
-def confusionMatrix(testData, className, predictions):
-    testData = testData.copy()
-    classes = {*testData[className].to_list()}
-    classAmnt = len(classes)
-
-    nonInt = any(type(c) != int for c in classes)
-    classOrder = []
-    classMap = {}
-
-    if nonInt:
-        classOrder = sorted([*classes])
-        classMap = {c:ind for ind,c in enumerate(classOrder)}
-        testData.replace({className: classMap}, inplace=True)
-        predictions = [*map(classMap.get, predictions)]
-
-    matrix = genConfusionMatrix(testData, className, predictions, classAmnt)
-    print()
-    printConfusionMatrix(matrix)
-    print()
-
-    if nonInt:
-        print(f"Ordering of class values L-R, T->D: {', '.join(classOrder)}")
-
-    print()
-
-
-# Calculate Euclidean distance
-def eucDist(p1, p2):
-    return math.sqrt(sum((p1[i]-p2[i])**2 for i in range(len(p1))))
-
-
-# Find mode of a list/array
-def mode(a):
-    return max(a, key=lambda x:a.count(x))
-
-
-
-#
-# Top-level execution
-#
-
-#Initialize global variables
-def setGlobals():
-    global STATS
-    STATS = {}
-
-    #Reference constants for alphabet and numerals
-    global ALPHAREF, NUMREF, CHARORDER
-    ALPHAREF = {char for char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
-    NUMREF = {char for char in "0123456789"}
-    CHARORDER = [char for char in "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456789"]
-
-
+def chooseAttributes(attributeList: pd.Series) -> pd.Series:
+    # filler for now; replacing this is our project
+    return attributeList.sample(len(attributeList) // 1.43) # or roughly 70% of the attributes
 
 #Main run
 def main():
     trainData, testData = pd.read_csv(str(ROOT)+"/trainingData.csv"), pd.read_csv(str(ROOT)+"/testingData.csv")
 
+    train_numpy = trainData.to_numpy()
+    test_numpy = testData.to_numpy()
 
-    print(f"Total time: {(time.time() - stTotal):.3g}s")
-    #print(STATS)
+    train_x, train_y = train_numpy[:, :-1], le.fit_transform(train_numpy[:, -1])
+    test_x, test_y = test_numpy[:, :-1], le.fit_transform(test_numpy[:, -1])
 
+    randomForest = RandomForestClassifier(n_estimators = 4)
+    randomForest.fit(train_x, train_y)
+    y_pred = randomForest.predict(test_x)
 
+    print(f"accuracy: {(y_pred == test_y).sum()}/{len(y_pred)} = {(y_pred == test_y).sum()/len(y_pred)}")
+    print(confusion_matrix(test_y, y_pred))
 
-#
-# Command line execution start below
-#
-
-setGlobals() #Set global variables
 if __name__ == "__main__": main() #Run main func
