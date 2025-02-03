@@ -32,6 +32,20 @@ def eucDst(p1, p2) -> float:
     return math.sqrt(sum((p2[i]-p1[i])**2 for i in range(len(p1))))
 
 
+# Use sklearn to classify an element with the decision tree
+def classifyDecisionTree(tree, instance):
+    return tree.predict(instance)
+
+
+# Convert
+def dfToNumpy(df, className):
+    print(df.columns)
+    ind = [*df.columns].index(className)
+    npDf = df.to_numpy()
+    X, y = np.concatenate((npDf[:, :ind], npDf[:, ind+1:]), axis=1), le.fit_transform(npDf[:, ind])
+    return X, y
+
+
 #
 # Dynamic Semi Random Forest | Core Algorithm
 #
@@ -43,23 +57,23 @@ def chooseAttributes(attributeList: pd.Series) -> pd.Series:
 
 
 # Build the DSRF model
-def buildDSRF(data, className, attAmnt=5, samples=30):
+def buildDSRF(data, dataNp, className, attAmnt=5, samples=30):
     # Currently code pasted from Random Forest implementation
     dsrf = []
     datalen = len(data.index)
     for _ in range(samples):
         newDataset = []
-        for i in range(datalen):
+        for _ in range(datalen):
             el = data.iloc[random.randint(0, datalen-1)]
             newDataset.append(el)
         newDataset = pd.DataFrame(newDataset)
-        feats = {*data.columns}
-        for i in range(attAmnt):
+        feats = {*data.columns} - {className}
+        for _ in range(attAmnt):
             lstFeats = [*feats]
             chosen = lstFeats[random.randint(0,len(lstFeats)-1)]
             feats.remove(chosen)
-        curTree = DecisionTreeClassifier()
-        curTree = curTree.fit(data, className)
+        curTree = DecisionTreeClassifier(n_features_in=np.array([*feats]))
+        curTree = curTree.fit(dataNp[0], dataNp[1])
         # curTree = buildDecisionTree(data, data, feats, className)
         dsrf.append(curTree)
     return dsrf
@@ -101,28 +115,25 @@ def testDSRF(dsrf, className, testData):
 
 # Main run for Dynamic Semi Random Forest algorithm
 def doDSRF(trainData, testData, className):
-    train_numpy = trainData.to_numpy()
-    test_numpy = testData.to_numpy()
-
-    train_x, train_y = train_numpy[:, :-1], le.fit_transform(train_numpy[:, -1])
-    test_x, test_y = test_numpy[:, :-1], le.fit_transform(test_numpy[:, -1])
+    train = dfToNumpy(trainData, className)
+    test = dfToNumpy(testData, className)
 
     randomForest = RandomForestClassifier(n_estimators = 4)
-    randomForest.fit(train_x, train_y)
-    y_pred = randomForest.predict(test_x)
+    randomForest.fit(train[0], train[1])
+    y_pred = randomForest.predict(test[0])
 
-    print(f"accuracy: {(y_pred == test_y).sum()}/{len(y_pred)} = {(y_pred == test_y).sum()/len(y_pred)}")
-    print(confusion_matrix(test_y, y_pred))
+    print(f"accuracy: {(y_pred == test[1]).sum()}/{len(y_pred)} = {(y_pred == test[1]).sum()/len(y_pred)}")
+    print(confusion_matrix(test[1], y_pred))
 
 
 #Main run
 def main():
     trainData, testData = pd.read_csv(str(ROOT)+"Data/trainingDataEx.csv"), pd.read_csv(str(ROOT)+"Data/testingDataEx.csv")
 
-    className = "class"
+    className = "Outcome"
     stInit = time.time()
     doDSRF(trainData, testData, className)
-    print(f"\nTotal runtime: {stInit-time.time():.3f}")
+    print(f"\nTotal runtime: {time.time()-stInit:.6f}s")
 
 
 
