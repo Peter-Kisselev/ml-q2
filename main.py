@@ -46,6 +46,12 @@ def dfToNumpy(df, className):
     return X, y
 
 
+# Normalize a vector with linear sum
+def normalizeLin(vec):
+    nVal = sum(vec)
+    return [el/nVal for el in vec]
+
+
 #
 # Dynamic Semi Random Forest | Core Algorithm
 #
@@ -57,26 +63,38 @@ def chooseAttributes(attributeList: pd.Series) -> pd.Series:
 
 
 # Build the DSRF model
-def buildDSRF(data, dataNp, className, attAmnt=5, samples=30):
-    # Currently code pasted from Random Forest implementation
+def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
     dsrf = []
     datalen = len(data.index)
-    for _ in range(samples):
-        newDataset = []
-        for _ in range(datalen):
-            el = data.iloc[random.randint(0, datalen-1)]
-            newDataset.append(el)
-        newDataset = pd.DataFrame(newDataset)
-        feats = {*data.columns} - {className}
-        for _ in range(attAmnt):
-            lstFeats = [*feats]
-            chosen = lstFeats[random.randint(0,len(lstFeats)-1)]
-            feats.remove(chosen)
-        curTree = DecisionTreeClassifier()
-        curTree.feature_names_in_ = np.array([*feats])
-        curTree = curTree.fit(dataNp[0], dataNp[1])
-        # curTree = buildDecisionTree(data, data, feats, className)
-        dsrf.append(curTree)
+
+    feats = [*data.columns]
+    feats = feats[:feats.index(className)] + feats[feats.index(className)+1:]
+    fInds = [ind for ind in range(len(feats))]
+    fWeights = [0.001 for _ in range(len(feats))]
+    fWeightsCp = fWeights.copy()
+
+    for _ in range(iterations):
+        dsrf = []
+        for _ in range(samples):
+            newDataset = []
+            for _ in range(datalen):
+                el = data.iloc[random.randint(0, datalen-1)]
+                newDataset.append(el)
+            newDataset = pd.DataFrame(newDataset)
+
+            choseF = np.random.choice(fInds, size=attAmnt, replace=False, p=normalizeLin(fWeightsCp))
+            curFeats = [feats[ind] for ind in choseF]
+            curTree = DecisionTreeClassifier()
+            curTree.feature_names_in_ = np.array([*curFeats])
+            curTree = curTree.fit(dataNp[0], dataNp[1])
+            y_pred = curTree.predict(dataNp[0])
+            acc = (y_pred == dataNp[1]).sum()/len(y_pred)
+            for ind in choseF:
+                fWeights[ind] += acc**2
+            dsrf.append(curTree)
+        fWeightsCp = fWeights.copy()
+    print([float(el) for el in fWeights])
+    print([float(el) for el in normalizeLin(fWeights)])
     return dsrf
 
 
@@ -93,6 +111,22 @@ def classifyDSRF(dsrf, instance):
 #
 # Performance evaluation
 #
+
+# Test a singular decision tree
+def testDecisionTree(tree, testNp):
+    correct = 0
+    total = 0
+    predictions = []
+    for ind in range(len(testNp[0])):
+        instNp = testNp[0][ind]
+        predicted = classifyDecisionTree(tree, instNp)[0]
+        if predicted == testNp[1][ind]:
+            correct += 1
+        total += 1
+        predictions.append(predicted)
+    accuracy = correct/total
+    return accuracy, predictions
+
 
 # Test the DSRF
 def testDSRF(dsrf, testNp):
@@ -119,7 +153,7 @@ def doDSRF(trainData, testData, className):
     train = dfToNumpy(trainData, className)
     test = dfToNumpy(testData, className)
 
-    dsrf = buildDSRF(trainData, train, className, attAmnt=8, samples=4)
+    dsrf = buildDSRF(trainData, train, className, attAmnt=3, samples=20, iterations=100)
     acc, preds = testDSRF(dsrf, test)
 
     print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
@@ -135,9 +169,9 @@ def doDSRF(trainData, testData, className):
 
 #Main run
 def main():
-    trainData, testData = pd.read_csv(str(ROOT)+"Data/trainingDataEx.csv"), pd.read_csv(str(ROOT)+"Data/testingDataEx.csv")
+    trainData, testData = pd.read_csv(str(ROOT)+"Data/trainingData.csv"), pd.read_csv(str(ROOT)+"Data/testingData.csv")
 
-    className = "Outcome"
+    className = "class"
     stInit = time.time()
     doDSRF(trainData, testData, className)
     print(f"\nTotal runtime: {time.time()-stInit:.6f}s")

@@ -96,9 +96,9 @@ def setGlobals():
 
 #Main run
 def main():
-    dataset = pd.read_csv(ROOT +"PATH")
-    dataset = discretizeDataset(dataset, "Outcome", 3)
-    trainData, testData = splitDataset(dataset, "Outcome")
+    dataset = pd.read_csv(ROOT + "Data/adsdataset.csv")
+    # dataset = discretizeDataset(dataset, "Outcome", 3)
+    trainData, testData = splitDataset(dataset, "class")
 
     trainData.to_csv(ROOT +"trainingData.csv", index=False)
     testData.to_csv(ROOT +"testingData.csv", index=False)
