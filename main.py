@@ -34,7 +34,7 @@ def eucDst(p1, p2) -> float:
 
 # Use sklearn to classify an element with the decision tree
 def classifyDecisionTree(tree, instance):
-    return tree.predict(instance)
+    return tree.predict([instance])
 
 
 # Convert
@@ -72,7 +72,8 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30):
             lstFeats = [*feats]
             chosen = lstFeats[random.randint(0,len(lstFeats)-1)]
             feats.remove(chosen)
-        curTree = DecisionTreeClassifier(n_features_in=np.array([*feats]))
+        curTree = DecisionTreeClassifier()
+        curTree.feature_names_in_ = np.array([*feats])
         curTree = curTree.fit(dataNp[0], dataNp[1])
         # curTree = buildDecisionTree(data, data, feats, className)
         dsrf.append(curTree)
@@ -94,14 +95,14 @@ def classifyDSRF(dsrf, instance):
 #
 
 # Test the DSRF
-def testDSRF(dsrf, className, testData):
+def testDSRF(dsrf, testNp):
     correct = 0
     total = 0
     predictions = []
-    for ind in range(len(testData.index)):
-        instance = testData.iloc[ind]
-        predicted = classifyDSRF(dsrf, instance)
-        if predicted == instance[className]:
+    for ind in range(len(testNp[0])):
+        instNp = testNp[0][ind]
+        predicted = classifyDSRF(dsrf, instNp)[0]
+        if predicted == testNp[1][ind]:
             correct += 1
         total += 1
         predictions.append(predicted)
@@ -118,12 +119,18 @@ def doDSRF(trainData, testData, className):
     train = dfToNumpy(trainData, className)
     test = dfToNumpy(testData, className)
 
-    randomForest = RandomForestClassifier(n_estimators = 4)
-    randomForest.fit(train[0], train[1])
-    y_pred = randomForest.predict(test[0])
+    dsrf = buildDSRF(trainData, train, className, attAmnt=8, samples=4)
+    acc, preds = testDSRF(dsrf, test)
 
-    print(f"accuracy: {(y_pred == test[1]).sum()}/{len(y_pred)} = {(y_pred == test[1]).sum()/len(y_pred)}")
-    print(confusion_matrix(test[1], y_pred))
+    print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
+    print(confusion_matrix(test[1], preds))
+
+    # randomForest = RandomForestClassifier(n_estimators = 4)
+    # randomForest.fit(train[0], train[1])
+    # y_pred = randomForest.predict(test[0])
+
+    # print(f"accuracy: {(y_pred == test[1]).sum()}/{len(y_pred)} = {(y_pred == test[1]).sum()/len(y_pred)}")
+    # print(confusion_matrix(test[1], y_pred))
 
 
 #Main run
