@@ -159,12 +159,12 @@ def doDSRF(trainData, testData, className):
     print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
     print(confusion_matrix(test[1], preds))
 
-    # randomForest = RandomForestClassifier(n_estimators = 4)
-    # randomForest.fit(train[0], train[1])
-    # y_pred = randomForest.predict(test[0])
+    randomForest = RandomForestClassifier(n_estimators = 4)
+    randomForest.fit(train[0], train[1])
+    y_pred = randomForest.predict(test[0])
 
-    # print(f"accuracy: {(y_pred == test[1]).sum()}/{len(y_pred)} = {(y_pred == test[1]).sum()/len(y_pred)}")
-    # print(confusion_matrix(test[1], y_pred))
+    print(f"accuracy: {(y_pred == test[1]).sum()}/{len(y_pred)} = {(y_pred == test[1]).sum()/len(y_pred)}")
+    print(confusion_matrix(test[1], y_pred))
 
 
 #Main run
