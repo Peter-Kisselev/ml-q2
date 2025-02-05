@@ -71,6 +71,19 @@ def discretizeDataset(dataset, className, bins):
     return dataset
 
 
+# Map discrete string data to integer bins on dataset
+def mapDataset(dataset):
+    for col in [*dataset.columns][:-1]:
+        if dataset[col].dtype == object:
+            # print(col)
+            mapIn = [*{*dataset[col]}]
+            mapping = {el:ind for ind, el in enumerate(mapIn)}
+            # print(mapping)
+            dataset[col] = dataset[col].map(mapping)
+            # print(dataset[col])
+    return dataset
+
+
 
 #
 # Classifiers
@@ -96,7 +109,9 @@ def setGlobals():
 
 #Main run
 def main():
-    dataset = pd.read_csv(ROOT + "Data/adsdataset.csv")
+    dataset = pd.read_csv(ROOT + "Data/adsDataset.csv")
+    dataset = mapDataset(dataset)
+    
     # dataset = discretizeDataset(dataset, "Outcome", 3)
     trainData, testData = splitDataset(dataset, "class")
 

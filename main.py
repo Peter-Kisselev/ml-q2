@@ -2,7 +2,6 @@ import time; stInit = time.time()
 import math
 import random
 import utils
-from typing import Any
 import numpy as np
 import pandas as pd
 import pathlib; ROOT = pathlib.Path(__file__).parent.resolve(); ROOT = str(ROOT) + "/" # Make file-getting location agnostic
@@ -23,7 +22,7 @@ pd.set_option("future.no_silent_downcasting", True)
 #
 
 # Find the mode
-def mode(arr) -> Any:
+def mode(arr):
     return max(arr, key=lambda x:arr.count(x))
 
 
@@ -34,7 +33,7 @@ def eucDst(p1, p2) -> float:
 
 # Use sklearn to classify an element with the decision tree
 def classifyDecisionTree(tree, instance):
-    return tree.predict([instance])
+    return tree.predict(instance)
 
 
 # Convert
@@ -50,6 +49,13 @@ def dfToNumpy(df, className):
 def normalizeLin(vec):
     nVal = sum(vec)
     return [el/nVal for el in vec]
+
+
+# Prepare the probability distribution
+def prepDstr(dstr):
+    s = sum(dstr)
+    avg = s/len(dstr)
+    return [(el if el != 0.001 else (s:=s+avg))/s for el in dstr]
 
 
 #
@@ -68,33 +74,34 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
     datalen = len(data.index)
 
     feats = [*data.columns]
+    featLen = len(feats)
     feats = feats[:feats.index(className)] + feats[feats.index(className)+1:]
     fInds = [ind for ind in range(len(feats))]
     fWeights = [0.001 for _ in range(len(feats))]
     fWeightsCp = fWeights.copy()
 
-    for _ in range(iterations):
+    for i in range(iterations):
+        print(f"Iteration #:{i}")
         dsrf = []
         for _ in range(samples):
-            newDataset = []
-            for _ in range(datalen):
-                el = data.iloc[random.randint(0, datalen-1)]
-                newDataset.append(el)
-            newDataset = pd.DataFrame(newDataset)
+            newDataInds = np.random.choice(range(datalen), size=datalen, replace=True)
+            dataNpNew = (dataNp[0][newDataInds], dataNp[1][newDataInds])
 
-            choseF = np.random.choice(fInds, size=attAmnt, replace=False, p=normalizeLin(fWeightsCp))
+            choseF = np.random.choice(fInds, size=attAmnt, replace=False, p=prepDstr(fWeightsCp))
             curFeats = [feats[ind] for ind in choseF]
             curTree = DecisionTreeClassifier()
-            curTree.feature_names_in_ = np.array([*curFeats])
-            curTree = curTree.fit(dataNp[0], dataNp[1])
-            y_pred = curTree.predict(dataNp[0])
-            acc = (y_pred == dataNp[1]).sum()/len(y_pred)
+            curTree.feature_names_in_ = curFeats
+            curTree = curTree.fit(dataNpNew[0], dataNpNew[1])
+            y_pred = curTree.predict(dataNpNew[0])
+            acc = (y_pred == dataNpNew[1]).sum()/len(y_pred)
             for ind in choseF:
                 fWeights[ind] += acc**2
-            dsrf.append(curTree)
+
+            if i == iterations - 1:
+                dsrf.append(curTree)
         fWeightsCp = fWeights.copy()
     print([float(el) for el in fWeights])
-    print([float(el) for el in normalizeLin(fWeights)])
+    # print([float(el) for el in normalizeLin(fWeights)])
     return dsrf
 
 
@@ -102,7 +109,7 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
 def classifyDSRF(dsrf, instance):
     preds = []
     for tree in dsrf:
-        pred = classifyDecisionTree(tree, instance)
+        pred = classifyDecisionTree(tree, [instance])
         preds.append(pred)
     return mode(preds)
 
@@ -113,18 +120,23 @@ def classifyDSRF(dsrf, instance):
 #
 
 # Test a singular decision tree
-def testDecisionTree(tree, testNp):
+def testDecisionTree2(tree, testNp):
     correct = 0
     total = 0
     predictions = []
     for ind in range(len(testNp[0])):
         instNp = testNp[0][ind]
-        predicted = classifyDecisionTree(tree, instNp)[0]
+        predicted = classifyDecisionTree(tree, [instNp])[0]
         if predicted == testNp[1][ind]:
             correct += 1
         total += 1
         predictions.append(predicted)
     accuracy = correct/total
+    return accuracy, predictions
+
+def testDecisionTree(tree, testNp):
+    predictions = classifyDecisionTree(tree, testNp[0])
+    accuracy = (testNp[1] == predictions)/len(predictions)
     return accuracy, predictions
 
 
@@ -153,13 +165,15 @@ def doDSRF(trainData, testData, className):
     train = dfToNumpy(trainData, className)
     test = dfToNumpy(testData, className)
 
-    dsrf = buildDSRF(trainData, train, className, attAmnt=3, samples=20, iterations=100)
+    sampleAmnt = 40
+
+    dsrf = buildDSRF(trainData, train, className, attAmnt=30, samples=sampleAmnt, iterations=10)
     acc, preds = testDSRF(dsrf, test)
 
     print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
     print(confusion_matrix(test[1], preds))
 
-    randomForest = RandomForestClassifier(n_estimators = 4)
+    randomForest = RandomForestClassifier(n_estimators = sampleAmnt)
     randomForest.fit(train[0], train[1])
     y_pred = randomForest.predict(test[0])
 
