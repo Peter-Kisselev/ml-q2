@@ -38,7 +38,7 @@ def classifyDecisionTree(tree, instance):
 
 # Convert
 def dfToNumpy(df, className):
-    print(df.columns)
+    # print(df.columns)
     ind = [*df.columns].index(className)
     npDf = df.to_numpy()
     X, y = np.concatenate((npDf[:, :ind], npDf[:, ind+1:]), axis=1), le.fit_transform(npDf[:, ind])
@@ -52,10 +52,15 @@ def normalizeLin(vec):
 
 
 # Prepare the probability distribution
-def prepDstr(dstr):
+def prepDstr(dstr, hits):
     s = sum(dstr)
     avg = s/len(dstr)
-    return [(el if el != 0.001 else (s:=s+avg))/s for el in dstr]
+    s = 0
+    for ind, el in enumerate(dstr):
+        if el == 0.001: dstr[ind] = avg
+        s += dstr[ind]/hits[ind]
+        dstr[ind] = dstr[ind]/hits[ind]
+    return np.array([el/(s) for ind, el in enumerate(dstr)])
 
 
 #
@@ -68,8 +73,13 @@ def chooseAttributes(attributeList: pd.Series) -> pd.Series:
     return attributeList.sample(len(attributeList) // 1.43) # or roughly 70% of the attributes
 
 
+# Model Accuracy Function
+def accFun(acc):
+    return acc ** 2
+
+
 # Build the DSRF model
-def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
+def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, batchSize = 10, batchAtts = 5, iterations=10):
     dsrf = []
     datalen = len(data.index)
 
@@ -77,17 +87,22 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
     featLen = len(feats)
     feats = feats[:feats.index(className)] + feats[feats.index(className)+1:]
     fInds = [ind for ind in range(len(feats))]
-    fWeights = [0.001 for _ in range(len(feats))]
-    fWeightsCp = fWeights.copy()
+    fWeights = np.array([0.001 for _ in range(len(feats))])
+    fHits = [1 for _ in range(featLen)]
+    fWeightsCp = prepDstr(fWeights.copy(), fHits)
 
-    for i in range(iterations):
-        print(f"Iteration #:{i}")
+    for i in range(iterations+1):
+        print(f"Iteration {i}")
         dsrf = []
-        for _ in range(samples):
+
+        treeAmnt = batchSize if i != iterations else samples
+        for _ in range(treeAmnt):
+            featAmnt = batchAtts if i != iterations else attAmnt
+
             newDataInds = np.random.choice(range(datalen), size=datalen, replace=True)
             dataNpNew = (dataNp[0][newDataInds], dataNp[1][newDataInds])
 
-            choseF = np.random.choice(fInds, size=attAmnt, replace=False, p=prepDstr(fWeightsCp))
+            choseF = np.random.choice(fInds, size=featAmnt, replace=False, p=fWeightsCp)
             curFeats = [feats[ind] for ind in choseF]
             curTree = DecisionTreeClassifier()
             curTree.feature_names_in_ = curFeats
@@ -95,12 +110,13 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, iterations=10):
             y_pred = curTree.predict(dataNpNew[0])
             acc = (y_pred == dataNpNew[1]).sum()/len(y_pred)
             for ind in choseF:
-                fWeights[ind] += acc**2
+                fWeights[ind] += accFun(acc)
+                fHits[ind] += 1
 
-            if i == iterations - 1:
+            if i == iterations:
                 dsrf.append(curTree)
-        fWeightsCp = fWeights.copy()
-    print([float(el) for el in fWeights])
+        fWeightsCp = prepDstr(fWeights.copy(), fHits)
+    print(f"Number of unhit attributes: {[float(el) for el in fWeights].count(0.001)}")
     # print([float(el) for el in normalizeLin(fWeights)])
     return dsrf
 
@@ -167,7 +183,7 @@ def doDSRF(trainData, testData, className):
 
     sampleAmnt = 40
 
-    dsrf = buildDSRF(trainData, train, className, attAmnt=30, samples=sampleAmnt, iterations=10)
+    dsrf = buildDSRF(trainData, train, className, attAmnt=40, samples=sampleAmnt, batchSize=30, batchAtts=10, iterations=10)
     acc, preds = testDSRF(dsrf, test)
 
     print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
