@@ -4,6 +4,7 @@ import random
 import utils
 import numpy as np
 import pandas as pd
+from functools import cmp_to_key
 import pathlib; ROOT = pathlib.Path(__file__).parent.resolve(); ROOT = str(ROOT) + "/" # Make file-getting location agnostic
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import LabelEncoder; le = LabelEncoder()
@@ -62,6 +63,8 @@ def prepDstr(dstr, hits):
         dstr[ind] = dstr[ind]/hits[ind]
     return np.array([el/(s) for ind, el in enumerate(dstr)])
 
+def weight_sort(x, y): # for an enumerated list (index, accuracy)
+    return x[1] < y[1]
 
 #
 # Dynamic Semi Random Forest | Core Algorithm
@@ -75,11 +78,19 @@ def chooseAttributes(attributeList: pd.Series) -> pd.Series:
 
 # Model Accuracy Function
 def accFun(acc):
-    return acc ** 2
+    return acc ** 5
+
+# Predict using the DSRF model
+def classifyDSRF(dsrf, instance):
+    preds = []
+    for tree in dsrf:
+        pred = classifyDecisionTree(tree, [instance])
+        preds.append(pred)
+    return mode(preds)
 
 
 # Build the DSRF model
-def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, batchSize = 10, batchAtts = 5, iterations=10):
+def buildDSRF(data, dataNp, className, testDataset, attAmnt=5, samples=30, batchSize = 10, batchAtts = 5, iterations=10):
     dsrf = []
     datalen = len(data.index)
 
@@ -113,22 +124,14 @@ def buildDSRF(data, dataNp, className, attAmnt=5, samples=30, batchSize = 10, ba
                 fWeights[ind] += accFun(acc)
                 fHits[ind] += 1
 
-            if i == iterations:
-                dsrf.append(curTree)
+            dsrf.append(curTree)
         fWeightsCp = prepDstr(fWeights.copy(), fHits)
+        acc, preds = testDSRF(dsrf, testDataset)
+        print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
+        print(confusion_matrix(testDataset[1], preds))
     print(f"Number of unhit attributes: {[float(el) for el in fWeights].count(0.001)}")
     # print([float(el) for el in normalizeLin(fWeights)])
     return dsrf
-
-
-# Predict using the DSRF model
-def classifyDSRF(dsrf, instance):
-    preds = []
-    for tree in dsrf:
-        pred = classifyDecisionTree(tree, [instance])
-        preds.append(pred)
-    return mode(preds)
-
 
 
 #
@@ -183,7 +186,7 @@ def doDSRF(trainData, testData, className):
 
     sampleAmnt = 40
 
-    dsrf = buildDSRF(trainData, train, className, attAmnt=40, samples=sampleAmnt, batchSize=30, batchAtts=10, iterations=10)
+    dsrf = buildDSRF(trainData, train, className, test, attAmnt=45, samples=sampleAmnt, batchSize=30, batchAtts=15, iterations=15)
     acc, preds = testDSRF(dsrf, test)
 
     print(f"accuracy: {int(round(acc*len(preds)))}/{len(preds)} = {acc}")
